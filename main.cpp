@@ -58,15 +58,18 @@ int main(int argc, char const *argv[]) {
 	}
 
 	Display* g_display = XOpenDisplay(0);
-	draw.init();
-	draw.toggleoverlay(true);
+	bool disableoverlay = false;
 
 	for (int i = 0; i < argc; ++i) {
 		if (strcmp(argv[i], "-noover") == 0) {
+			disableoverlay = true;
 			draw.toggleoverlay(false);
 		}
 	}
 
+	if (!disableoverlay)
+		draw.init();
+	
 	int keycodeGlow = XKeysymToKeycode(g_display, XK_Alt_L);
 	int keycodeGlowOthers = XKeysymToKeycode(g_display, XK_Control_R);
 	int keycodeDisablePostProcessing = XKeysymToKeycode(g_display, XK_KP_1);
@@ -195,7 +198,6 @@ int main(int argc, char const *argv[]) {
 	pthread_create(&bhopthread, NULL, bhoploop, NULL);
 
 	while (csgo.IsRunning()) {
-
 		XQueryKeymap(g_display, keys);
 		for (unsigned i = 0; i < sizeof(keys); ++i) {
 			if (keys[i] != lastkeys[i]) {
@@ -204,19 +206,20 @@ int main(int argc, char const *argv[]) {
 					// if the key was pressed, and it wasn't before, print this
 					if ((keys[i] & test) && ((keys[i] & test) != (lastkeys[i] & test))) {
 						const int code = i * 8 + j;
-						if(code == keycodeGlow) {
+						if (code == keycodeGlow) {
 							cout << (csgo.shouldGlow ? "00000 GLOW OFF" : ">>>>> GLOW ON") << endl;
 							csgo.shouldGlow = !csgo.shouldGlow;
 							csgo.justglowoff = true;
 							//csgo.debugoff += 0x18;
 							//cout << hex << csgo.debugoff << endl;
+							//
 							draw.clearscreen();
-						} else if(code == keycodeGlowOthers) {
+						} else if (code == keycodeGlowOthers) {
 							cout << (csgo.glowOthers ? "00000 Glow -> OTHERS OFF" : ">>>>> Glow -> OTHERS ON") << endl;
 							csgo.glowOthers = !csgo.glowOthers;
 							csgo.justglowothersoff = true;
 							draw.clearscreen();
-						} else if(code == keycodeDisablePostProcessing) {
+						} else if (code == keycodeDisablePostProcessing) {
 							cout << (csgo.shouldDisablePostProcessing ? "00000 PostProcessing OFF" : ">>>>> PostProcessing ON") << endl;
 							csgo.shouldDisablePostProcessing = !csgo.shouldDisablePostProcessing;
 						}
@@ -226,17 +229,18 @@ int main(int argc, char const *argv[]) {
 			lastkeys[i] = keys[i];
 		}
 		
+
 		draw.startdraw();
 		hack::Glow(&csgo, &client, &draw);
 		usleep(10000);
 
-		if(draw.overlayenabled) {
+		if (draw.overlayenabled) {
 			string toggledstr = ( string(csgo.shouldGlow ? (csgo.glowOthers ? "GLOW All" : "GLOW Players") : ""));
-			if(toggledstr != "") {
+			if (toggledstr != "") {
 				draw.drawString(toggledstr.c_str(), draw.WIDTH/2, draw.HEIGHT-draw.font_height*2, draw.ltblue, draw.blacka, 1);
 			}
 		}
-		if(csgo.shouldDisablePostProcessing) {
+		if (csgo.shouldDisablePostProcessing) {
 			bool disable = true;
 			csgo.Write((void*) (csgo.m_addressOfOverridePostProcessingDisable), &disable, sizeof(bool));
 		} else {

@@ -116,7 +116,8 @@ void Draw::createShapedWindow() {
 // Yes it's possible, but only pixels that hits the mask are visible.
 // A hint: You can change the mask during runtime if you like.
 void Draw::startdraw() {
-	if(!overlayenabled) return;
+	if (!overlayenabled)
+		return;
 
 	fpsmeterc++;
 	if(fpsmeterc == FPSMETERSAMPLE) {
@@ -151,7 +152,8 @@ bool isSameColor(XColor col1, XColor col2) {
 	return (*(&col1.pixel) == *(&col2.pixel));
 }
 void Draw::drawString(const char * text, int x, int y, XColor fgcolor, XColor bgcolor, int align) {
-	if(!overlayenabled) return;
+	if (!this->overlayenabled)
+		return;
 
 	int tlen = strlen(text);
 	if(!isSameColor(transparent, bgcolor)) {
@@ -162,7 +164,8 @@ void Draw::drawString(const char * text, int x, int y, XColor fgcolor, XColor bg
 	XDrawString(g_display, g_win, gc, x - (align == ALIGN_CENTER ? tlen*font_width/2 : (align == ALIGN_RIGHT ? tlen*font_width : 0)), y+font_height, text, tlen);
 }
 void Draw::enddraw() {
-	if(!overlayenabled) return;
+	if (!this->overlayenabled)
+		return;
 
 	if(duration > 0.0f) drawString(fpsstring.c_str(), WIDTH/2, 44, red, blacka, ALIGN_CENTER);
 	renderi++;
@@ -174,18 +177,24 @@ void Draw::enddraw() {
 	XFreeGC(g_display, gc);
 }
 void Draw::clearscreen() {
-	if(!overlayenabled) return;
+	if (!this->overlayenabled)
+		return;
 	XClearArea(g_display, g_win, 0, 0, WIDTH, HEIGHT, false);
 }
 void Draw::clearArea(int x, int y, int width, int height) {
-	if(!overlayenabled) return;
+	if (!this->overlayenabled)
+		return;
 	XClearArea(g_display, g_win, x, y, width, height, false);
 }
 void Draw::drawLine(int x1, int y1, int x2, int y2, XColor color) {
+	if (!this->overlayenabled)
+		return;
 	XSetForeground (g_display, gc, color.pixel);
 	XDrawLine(g_display, g_win, gc, x1, y1, x2, y2);
 }
 void Draw::fillRectangle(int x, int y, int width, int height, XColor color) {
+	if (!this->overlayenabled)
+		return;
 	XSetForeground (g_display, gc, color.pixel);
 	XFillRectangle(g_display, g_win, gc, x, y, width, height);
 }
@@ -245,7 +254,7 @@ void Draw::setCaptureInput(bool state) {
 }
 void Draw::init() {
 	openDisplay();
-	if(!overlayavailable) {
+	if(!this->overlayavailable) {
 		fprintf (stderr, "Overlay is not availalbe!\n");
 		return;
 	}
@@ -282,6 +291,6 @@ void Draw::init() {
 	}
 
 }
-void Draw::toggleoverlay(bool state) { if(overlayavailable) overlayenabled = state; }
-void Draw::toggleoverlay() { if(overlayavailable) overlayenabled = !overlayenabled; }
-void Draw::halt() { if(!overlayavailable) XCloseDisplay(g_display); }
+void Draw::toggleoverlay(bool state) { this->overlayenabled = state; }
+void Draw::toggleoverlay() { this->overlayenabled = !this->overlayenabled; }
+void Draw::halt() { if(!this->overlayavailable) XCloseDisplay(g_display); }

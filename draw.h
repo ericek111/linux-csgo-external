@@ -70,7 +70,7 @@ class Draw {
 	int      g_disp_width;
 	int      g_disp_height;
 	Colormap g_colormap;
-	bool overlayenabled = false;
+	bool overlayenabled = true;
 	bool overlayavailable = false;
 	bool doesCaptureInput = false;
 	std::vector<XRectangle> captureAreas;

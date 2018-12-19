@@ -6,6 +6,34 @@ struct hack::GlowObjectDefinition_t g_glow[1024];
 int count = 0;
 unsigned char spotted = 1;
 
+void RecoilCross(remote::Handle* csgo, remote::MapModuleMemoryRegion* client, Draw* draw) {
+	QAngle toread;
+	csgo->Read((void*) (csgo->m_localPlayer + 0x3700 + 0x74), &toread, sizeof(QAngle));
+	//draw->clearArea(draw->WIDTH-300, 200, 300, 400);
+	//draw->drawString((std::string("Velocity: ")+to_string((toread.x))+std::string(" / ")+to_string((toread.y))+std::string(" / ")+to_string((toread.z))).c_str(), draw->WIDTH/2+100, draw->HEIGHT-draw->font_height*1-15, draw->ltblue, draw->blacka, ALIGN_LEFT);
+
+	int ScreenWidth = draw->WIDTH, ScreenHeight = draw->HEIGHT;
+	int fov = 90;
+
+	int x = (int) (ScreenWidth * 0.5f);
+	int y = (int) (ScreenHeight * 0.5f);
+	int dx = ScreenWidth / fov;
+	int dy = ScreenHeight / fov;
+
+	int crosshairX = (int) (x - (dx * toread.y));
+	int crosshairY = (int) (y + (dy * toread.x));
+	draw->clearArea(crosshairX-30, crosshairY-50, 50, 70);
+
+	draw->fillRectangle(crosshairX-6, crosshairY-1, 12, 3, draw->blackma);
+	draw->fillRectangle(crosshairX-1, crosshairY-6, 3, 12, draw->blackma);
+
+	draw->drawLine(crosshairX - 5, crosshairY, crosshairX + 5, crosshairY, draw->white);
+	draw->drawLine(crosshairX, crosshairY + 5, crosshairX, crosshairY - 5, draw->white);
+
+	draw->fillRectangle(x-2, y-2, 4, 4, draw->blacka);
+	draw->fillRectangle(x-1, y-1, 2, 2, draw->ltblue);
+}
+
 void hack::Glow(remote::Handle* csgo, remote::MapModuleMemoryRegion* client, Draw* draw) {
 	if (!csgo || !client)
 		return;
@@ -35,31 +63,9 @@ void hack::Glow(remote::Handle* csgo, remote::MapModuleMemoryRegion* client, Dra
 		throw 1;
 	}
 
-	QAngle toread;
-	csgo->Read((void*) (csgo->m_localPlayer + 0x3700 + 0x74), &toread, sizeof(QAngle));
-	//draw->clearArea(draw->WIDTH-300, 200, 300, 400);
-	//draw->drawString((std::string("Velocity: ")+to_string((toread.x))+std::string(" / ")+to_string((toread.y))+std::string(" / ")+to_string((toread.z))).c_str(), draw->WIDTH/2+100, draw->HEIGHT-draw->font_height*1-15, draw->ltblue, draw->blacka, ALIGN_LEFT);
-
-	int ScreenWidth = draw->WIDTH, ScreenHeight = draw->HEIGHT;
-	int fov = 90;
-
-	int x = (int) (ScreenWidth * 0.5f);
-	int y = (int) (ScreenHeight * 0.5f);
-	int dx = ScreenWidth / fov;
-	int dy = ScreenHeight / fov;
-
-	int crosshairX = (int) (x - (dx * toread.y));
-	int crosshairY = (int) (y + (dy * toread.x));
-	draw->clearArea(crosshairX-30, crosshairY-50, 50, 70);
-
-	draw->fillRectangle(crosshairX-6, crosshairY-1, 12, 3, draw->blackma);
-	draw->fillRectangle(crosshairX-1, crosshairY-6, 3, 12, draw->blackma);
-
-	draw->drawLine(crosshairX - 5, crosshairY, crosshairX + 5, crosshairY, draw->white);
-	draw->drawLine(crosshairX, crosshairY + 5, crosshairX, crosshairY - 5, draw->white);
-
-	draw->fillRectangle(x-2, y-2, 4, 4, draw->blacka);
-	draw->fillRectangle(x-1, y-1, 2, 2, draw->ltblue);
+	if (draw->overlayenabled) {
+		RecoilCross(csgo, client, draw);
+	}
 
 	for (unsigned int i = 0; i < count; i++) {
 		if (g_glow[i].m_pEntity != NULL) {
