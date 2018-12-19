@@ -1,287 +1,299 @@
-#include "remote.hpp"
-#include "log.hpp"
+#include "remote.h"
+#include <iostream>
 
 #define FINDPATTERN_CHUNKSIZE 0x1000
 
 namespace remote {
-    // Map Module
-    void* MapModuleMemoryRegion::find(Handle handle, const char* data, const char* pattern) {
-        char buffer[FINDPATTERN_CHUNKSIZE];
+	// Map Module
+	void* MapModuleMemoryRegion::find(Handle handle, const char* data, const char* pattern) {
+		char buffer[FINDPATTERN_CHUNKSIZE];
 
-        size_t len = strlen(pattern);
-        size_t chunksize = sizeof(buffer);
-        size_t totalsize = this->end - this->start;
-        size_t chunknum = 0;
+		size_t len = strlen(pattern);
+		size_t chunksize = sizeof(buffer);
+		size_t totalsize = this->end - this->start;
+		size_t chunknum = 0;
+		size_t matches = 0;
 
-        while(totalsize) {
-            size_t readsize = (totalsize < chunksize) ? totalsize : chunksize;
-            size_t readaddr = this->start + (chunksize * chunknum);
+		while (totalsize) {
+			size_t readsize = (totalsize < chunksize) ? totalsize : chunksize;
+			size_t readaddr = this->start + (chunksize * chunknum);
 
-            bzero(buffer, chunksize);
+			bzero(buffer, chunksize);
 
-            if(handle.Read((void*) readaddr, buffer, readsize)) {
-                for(size_t b = 0; b < readsize; b++) {
-                    size_t matches = 0;
+			if (handle.Read((void*) readaddr, buffer, readsize)) {
+				for (size_t b = 0; b < readsize; b++) {
+					for (size_t t = b; t < readsize; t++) {
+						if (buffer[t] != data[matches] && pattern[matches] == 'x') {
+							matches = 0;
+							break;
+						}
+						matches++;
 
-                    while(buffer[b + matches] == data[matches] || pattern[matches] != 'x') {
-                        matches++;
+						if (matches == len) {
+							return (char*) (readaddr + b);
+						}
+					}
+				}
+			}
 
-                        if(matches == len) {
-//                            printf("Debug Output:\n");
-//                            for(int i = 0; i < readsize-b; i++)
-//                            {
-//                                if(i != 0 && i % 8 == 0) {
-//                                    printf("\n");
-//                                }
-//                                printf("%02x ",(unsigned char)buffer[b+i]);
-//                            }
-//                            printf("\n");
-                            return (char*) (readaddr + b);
-                        }
-                    }
-                }
-            }
+			totalsize -= readsize;
+			chunknum++;
+		}
 
-            totalsize -= readsize;
-            chunknum++;
-        }
+		return NULL;
+	}
 
-        return NULL;
-    }
+	// Handle
+	Handle::Handle(pid_t target) {
+		std::stringstream buffer;
+		buffer << target;
+		pid = target;
+		pidStr = buffer.str();
+	}
 
-    // Handle
-    Handle::Handle(pid_t target) {
-        std::stringstream buffer;
-        buffer << target;
-        pid = target;
-        pidStr = buffer.str();
-    }
+	Handle::Handle(std::string target) {
+		// Check to see if the string is numeric (no negatives or dec allowed, which makes this function usable)
+		if (strspn(target.c_str(), "0123456789") != target.size()) {
+			pid = -1;
+			pidStr.clear();
+		} else {
+			std::istringstream buffer(target);
+			pidStr = target;
+			buffer >> pid;
+		}
+	}
 
-    Handle::Handle(std::string target) {
-        // Check to see if the string is numeric (no negatives or dec allowed, which makes this function usable)
-        if(strspn(target.c_str(), "0123456789") != target.size()) {
-            pid = -1;
-            pidStr.clear();
-        } else {
-            std::istringstream buffer(target);
-            pidStr = target;
-            buffer >> pid;
-        }
-    }
+	std::string Handle::GetPath() {
+		return GetSymbolicLinkTarget(("/proc/" + pidStr + "/exe"));
+	}
 
-    std::string Handle::GetPath() {
-        return GetSymbolicLinkTarget(("/proc/" + pidStr + "/exe"));
-    }
+	std::string Handle::GetWorkingDirectory() {
+		return GetSymbolicLinkTarget(("/proc/" + pidStr + "/cwd"));
+	}
 
-    std::string Handle::GetWorkingDirectory() {
-        return GetSymbolicLinkTarget(("/proc/" + pidStr + "/cwd"));
-    }
+	bool Handle::IsValid() {
+		return (pid != -1);
+	}
 
-    bool Handle::IsValid() {
-        return (pid != -1);
-    }
+	bool Handle::IsRunning() {
+		if (!IsValid())
+			return false;
 
-    bool Handle::IsRunning() {
-        if(!IsValid())
-            return false;
+		struct stat sts;
+		return !(stat(("/proc/" + pidStr).c_str(), &sts) == -1 && errno == ENOENT);
+	}
 
-        struct stat sts;
-        return !(stat(("/proc/" + pidStr).c_str(), &sts) == -1 && errno == ENOENT);
-    }
+	bool Handle::Write(void* address, void* buffer, size_t size) {
+		struct iovec local[1];
+		struct iovec remote[1];
 
-    bool Handle::Write(void* address, void* buffer, size_t size) {
-        struct iovec local[1];
-        struct iovec remote[1];
+		local[0].iov_base = buffer;
+		local[0].iov_len = size;
+		remote[0].iov_base = address;
+		remote[0].iov_len = size;
 
-        local[0].iov_base = buffer;
-        local[0].iov_len = size;
-        remote[0].iov_base = address;
-        remote[0].iov_len = size;
+		return (process_vm_writev(pid, local, 1, remote, 1, 0) == size);
+	}
 
-        return (process_vm_writev(pid, local, 1, remote, 1, 0) == size);
-    }
+	bool Handle::Read(void* address, void* buffer, size_t size) {
+		struct iovec local[1];
+		struct iovec remote[1];
 
-    bool Handle::Read(void* address, void* buffer, size_t size) {
-        struct iovec local[1];
-        struct iovec remote[1];
+		local[0].iov_base = buffer;
+		local[0].iov_len = size;
+		remote[0].iov_base = address;
+		remote[0].iov_len = size;
 
-        local[0].iov_base = buffer;
-        local[0].iov_len = size;
-        remote[0].iov_base = address;
-        remote[0].iov_len = size;
+		return (process_vm_readv(pid, local, 1, remote, 1, 0) == size);
+	}
 
-        return (process_vm_readv(pid, local, 1, remote, 1, 0) == size);
-    }
+	unsigned long Handle::GetCallAddress(void* address) {
+		int code = 0;
 
-    unsigned long Handle::GetAbsoluteAddress(void* address, int offset, int size) {
-        unsigned int code = 0;
+		if (Read((char*) address + 1, &code, sizeof(unsigned int))) {
+			return code + (unsigned long) address + 5;
+		}
 
-        if(Read((char*) address + offset, &code, sizeof(unsigned int))) {
-            return (unsigned long) address + code + size;
-        }
+		return 0;
+	}
 
-        return 0;
-    }
+	unsigned long Handle::GetAbsoluteAddress(void* address, int offset, int size) {
+		int code = 0;
 
-    unsigned long Handle::GetCallAddress(void* address) {
-        unsigned long code = 0;
+		if (Read((char*) ((unsigned long) address + offset), &code, sizeof(unsigned int))) {
+			return code + (unsigned long) address + size;
+		}
 
-        if(Read((char*) address + 1, &code, sizeof(unsigned int))) {
-            return code + (unsigned long) address + 5;
-        }
+		return 0;
+	}
 
-        return 0;
-    }
+	MapModuleMemoryRegion* Handle::GetRegionOfAddress(void* address) {
+		for (size_t i = 0; i < regions.size(); i++) {
+			if (regions[i].start > (unsigned long) address && (regions[i].start + regions[i].end) <= (unsigned long) address) {
+				return &regions[i];
+			}
+		}
 
-    MapModuleMemoryRegion* Handle::GetRegionOfAddress(void* address) {
-        for(size_t i = 0; i < regions.size(); i++) {
-            if(regions[i].start > (unsigned long) address && (regions[i].start + regions[i].end) <= (unsigned long) address) {
-                return &regions[i];
-            }
-        }
+		return NULL;
+	}
 
-        return NULL;
-    }
+	void Handle::ParseMaps() {
+		regions.clear();
 
-    void Handle::ParseMaps() {
-        regions.clear();
+		std::ifstream maps("/proc/" + pidStr + "/maps");
 
-        std::ifstream maps("/proc/" + pidStr + "/maps");
+		std::string line;
+		while (std::getline(maps, line)) {
+			std::istringstream iss(line);
+			std::string memorySpace, permissions, offset, device, inode;
+			if (iss >> memorySpace >> permissions >> offset >> device >> inode) {
+				std::string pathname;
 
-        std::string line;
-        while (std::getline(maps, line)) {
-            std::istringstream iss(line);
-            std::string memorySpace, permissions, offset, device, inode;
-            if (iss >> memorySpace >> permissions >> offset >> device >> inode) {
-                std::string pathname;
+				for (size_t ls = 0, i = 0; i < line.length(); i++) {
+					if (line.substr(i, 1).compare(" ") == 0) {
+						ls++;
 
-                for(size_t ls = 0, i = 0; i < line.length(); i++) {
-                    if(line.substr(i, 1).compare(" ") == 0) {
-                        ls++;
+						if (ls == 5) {
+							size_t begin = line.substr(i, line.size()).find_first_not_of(' ');
 
-                        if(ls == 5) {
-                            size_t begin = line.substr(i, line.size()).find_first_not_of(' ');
+							if (begin != -1) {
+								pathname = line.substr(begin + i, line.size());
+							} else {
+								pathname.clear();
+							}
+						}
+					}
+				}
 
-                            if(begin != -1) {
-                                pathname = line.substr(begin + i, line.size());
-                            } else {
-                                pathname.clear();
-                            }
-                        }
-                    }
-                }
+				MapModuleMemoryRegion region;
 
-                MapModuleMemoryRegion region;
+				size_t memorySplit = memorySpace.find_first_of('-');
+				size_t deviceSplit = device.find_first_of(':');
 
-                size_t memorySplit = memorySpace.find_first_of('-');
-                size_t deviceSplit = device.find_first_of(':');
+				std::stringstream ss;
 
-                std::stringstream ss;
+				if (memorySplit != -1) {
+					ss << std::hex << memorySpace.substr(0, memorySplit);
+					ss >> region.start;
+					ss.clear();
+					ss << std::hex << memorySpace.substr(memorySplit + 1, memorySpace.size());
+					ss >> region.end;
+					ss.clear();
+				}
 
-                if(memorySplit != -1) {
-                    ss << std::hex << memorySpace.substr(0, memorySplit);
-                    ss >> region.start;
-                    ss.clear();
-                    ss << std::hex << memorySpace.substr(memorySplit + 1, memorySpace.size());
-                    ss >> region.end;
-                    ss.clear();
-                }
+				if (deviceSplit != -1) {
+					ss << std::hex << device.substr(0, deviceSplit);
+					ss >> region.deviceMajor;
+					ss.clear();
+					ss << std::hex << device.substr(deviceSplit + 1, device.size());
+					ss >> region.deviceMinor;
+					ss.clear();
+				}
 
-                if(deviceSplit != -1) {
-                    ss << std::hex << device.substr(0, deviceSplit);
-                    ss >> region.deviceMajor;
-                    ss.clear();
-                    ss << std::hex << device.substr(deviceSplit + 1, device.size());
-                    ss >> region.deviceMinor;
-                    ss.clear();
-                }
+				ss << std::hex << offset;
+				ss >> region.offset;
+				ss.clear();
+				ss << inode;
+				ss >> region.inodeFileNumber;
 
-                ss << std::hex << offset;
-                ss >> region.offset;
-                ss.clear();
-                ss << inode;
-                ss >> region.inodeFileNumber;
+				region.readable = (permissions[0] == 'r');
+				region.writable = (permissions[1] == 'w');
+				region.executable = (permissions[2] == 'x');
+				region.shared = (permissions[3] != '-');
 
-                region.readable = (permissions[0] == 'r');
-                region.writable = (permissions[1] == 'w');
-                region.executable = (permissions[2] == 'x');
-                region.shared = (permissions[3] != '-');
+				if (!pathname.empty()) {
+					region.pathname = pathname;
 
-                if(!pathname.empty()) {
-                    region.pathname = pathname;
+					size_t fileNameSplit = pathname.find_last_of('/');
 
-                    size_t fileNameSplit = pathname.find_last_of('/');
+					if (fileNameSplit != -1) {
+						region.filename = pathname.substr(fileNameSplit + 1, pathname.size());
+					}
+				}
 
-                    if(fileNameSplit != -1) {
-                        region.filename = pathname.substr(fileNameSplit + 1, pathname.size());
-                    }
-                }
+				regions.push_back(region);
+			}
+		}
+	}
 
-                regions.push_back(region);
-            }
-        }
-    }
+	std::string Handle::GetSymbolicLinkTarget(std::string target) {
+		char buf[PATH_MAX];
 
-    std::string Handle::GetSymbolicLinkTarget(std::string target) {
-        char buf[PATH_MAX];
+		ssize_t len = ::readlink(target.c_str(), buf, sizeof(buf) - 1);
 
-        ssize_t len = ::readlink(target.c_str(), buf, sizeof(buf) - 1);
+		if (len != -1) {
+			buf[len] = 0;
 
-        if(len != -1) {
-            buf[len] = 0;
+			return std::string(buf);
+		}
 
-            return std::string(buf);
-        }
-
-        return std::string();
-    }
+		return std::string();
+	}
 };
+
+unsigned long remote::getModule(const char * moduleName, pid_t pid) {
+	char cmd[256];
+	FILE *maps;
+	unsigned long result = 0;
+
+
+	snprintf(cmd, 256, "grep \"%s\" /proc/%i/maps | head -n 1 | cut -d \"-\" -f1", moduleName, pid);
+	maps = popen(cmd, "r");
+
+	if (maps) {
+		if (fscanf(maps, "%" SCNx64, &result));
+	}
+
+	pclose(maps);
+
+	return result;
+}
 
 // Functions Exported
 bool remote::FindProcessByName(std::string name, remote::Handle* out) {
-    if(out == NULL || name.empty())
-        return false;
+	if (out == NULL || name.empty())
+		return false;
 
-    struct dirent *dire;
+	struct dirent *dire;
 
-    DIR *dir = opendir("/proc/");
+	DIR *dir = opendir("/proc/");
 
-    if (dir) {
-        while ((dire = readdir(dir)) != NULL) {
-            if (dire->d_type != DT_DIR)
-                continue;
+	if (dir) {
+		while ((dire = readdir(dir)) != NULL) {
+			if (dire->d_type != DT_DIR)
+				continue;
 
-            std::string mapsPath = ("/proc/" + std::string(dire->d_name) + "/maps");
+			std::string mapsPath = ("/proc/" + std::string(dire->d_name) + "/maps");
 
-            if (access(mapsPath.c_str(), F_OK) == -1)
-                continue;
+			if (access(mapsPath.c_str(), F_OK) == -1)
+				continue;
 
-            remote::Handle proc(dire->d_name);
+			remote::Handle proc(dire->d_name);
 
-            if (!proc.IsValid() || !proc.IsRunning())
-                continue;
+			if (!proc.IsValid() || !proc.IsRunning())
+				continue;
 
-            std::string procPath = proc.GetPath();
+			std::string procPath = proc.GetPath();
 
-            if(procPath.empty())
-                continue;
+			if (procPath.empty())
+				continue;
 
-            size_t namePos = procPath.find_last_of('/');
+			size_t namePos = procPath.find_last_of('/');
 
-            if(namePos == -1)
-                continue; // what?
+			if (namePos == -1)
+				continue; // what?
 
-            std::string exeName = procPath.substr(namePos + 1);
+			std::string exeName = procPath.substr(namePos + 1);
 
-            if(exeName.compare(name) == 0) {
-                *out = proc;
+			if (exeName.compare(name) == 0) {
+				*out = proc;
 
-                return true;
-            }
-        }
+				return true;
+			}
+		}
 
-        closedir(dir);
-    }
+		closedir(dir);
+	}
 
-    return false;
+	return false;
 }
