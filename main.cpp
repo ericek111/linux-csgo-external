@@ -135,7 +135,7 @@ int main(int argc, char const *argv[]) {
 	
 	unsigned long foundGlowPointerCall = (long)client.find(csgo,
 				"\xE8\x00\x00\x00\x00\x49\x8B\x7D\x00\xC7\x40\x38\x00\x00\x00\x00\x48\x8B\x07\xFF\x90", // 2018-12-19
-				"x????xxxxxxxxxxxxxxxx") - 1;
+				"x????xxxxxxxxxxxxxxxx");
 
 	unsigned long glowFunctionCall = csgo.GetAbsoluteAddress((void*)(foundGlowPointerCall), 1, 5);
 	Logger::address ("Glow function call:\t", glowFunctionCall);

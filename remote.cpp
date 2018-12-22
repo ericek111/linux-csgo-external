@@ -30,7 +30,7 @@ namespace remote {
 						matches++;
 
 						if (matches == len) {
-							return (char*) (readaddr + b);
+							return (char*) (readaddr + t - matches + 1);
 						}
 					}
 				}
