@@ -57,24 +57,26 @@ namespace hack {
 		}
 
 		long writeEnd() {
-			return (long(&(this)->unk2) - long(this));
+			return (long(&(this)->m_nSplitScreenSlot) - long(this));
 		}
 
+		int m_nNextFreeSlot;
 		void* m_pEntity;
 		float m_flGlowRed;
 		float m_flGlowGreen;
 		float m_flGlowBlue;
 		float m_flGlowAlpha;
-		uint8_t unk0[16];
+		uint8_t unk0[8];
+		float m_flBloomAmount;
+		float localplayeriszeropoint3;
 		bool m_bRenderWhenOccluded : 8;
 		bool m_bRenderWhenUnoccluded : 8;
 		bool m_bFullBloomRender : 8;
 		unsigned char unk1;
 		int m_nFullBloomStencilTestValue;
+		int m_nRenderStyle;
 		int m_nSplitScreenSlot;
-		int m_nNextFreeSlot;
-		unsigned char unk2[4];
-
+		
 		static const int END_OF_FREE_LIST = -1;
 		static const int ENTRY_IN_USE = -2;
 	}; // sizeof() == 0x34
